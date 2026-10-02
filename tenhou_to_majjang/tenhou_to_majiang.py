@@ -291,6 +291,103 @@ def parse_players(attr):
 
 
 # ============================================================
+# hule → 和了情報
+# ============================================================
+
+HUPAI_NAMES = [
+    "門前清自摸和", "立直", "一発", "槍槓", "嶺上開花",
+    "海底摸月", "河底撈魚", "平和", "断幺九", "一盃口",
+    "自風 東", "自風 南", "自風 西", "自風 北",
+    "場風 東", "場風 南", "場風 西", "場風 北",
+    "役牌 白", "役牌 發", "役牌 中", "両立直", "七対子",
+    "混全帯幺九", "一気通貫", "三色同順", "三色同刻",
+    "三槓子", "対々和", "三暗刻", "小三元", "混老頭",
+    "二盃口", "純全帯幺九", "混一色", "清一色", "人和",
+    "天和", "地和", "大三元", "四暗刻", "四暗刻単騎",
+    "字一色", "緑一色", "清老頭", "九蓮宝燈",
+    "純正九蓮宝燈", "国士無双", "国士無双１３面",
+    "大四喜", "小四喜", "四槓子", "ドラ", "裏ドラ", "赤ドラ",
+]
+
+def hule(attr, oya, hongpai=True):
+    who = int(attr["who"])
+    from_who = int(attr["fromWho"])
+
+    # 天鳳のプレイヤー番号を親基準に変換
+    l = (who + 4 - oya) % 4
+    baojia = (
+        (from_who + 4 - oya) % 4
+        if who != from_who else None
+    )
+
+    # 手牌と和了牌をまとめて牌文字列に変換
+    machi = int(attr["machi"])
+    hai = list(map(int, attr["hai"].split(",")))
+    shoupai = pai(hai, hongpai)
+
+    # 副露面子（暗槓を含む）
+    m = attr.get("m", "")
+    if m:
+        mianzi_list = [
+            mianzi(int(code), hongpai)
+            for code in m.split(",")
+        ]
+        shoupai += "," + ",".join(reversed(mianzi_list))
+
+    # 和了役
+    hupai = []
+    fanshu = 0
+    yakuman = attr.get("yakuman", "")
+
+    if yakuman:
+        for yaku_id in map(int, yakuman.split(",")):
+            hupai.append({
+                "name": HUPAI_NAMES[yaku_id],
+                "fanshu": "*"
+            })
+    else:
+        yaku = list(map(int, attr.get("yaku", "").split(",")))
+        for i in range(0, len(yaku), 2):
+            yaku_id = yaku[i]
+            han = yaku[i + 1]
+            hupai.append({
+                "name": HUPAI_NAMES[yaku_id],
+                "fanshu": han
+            })
+            fanshu += han
+
+    # 各プレイヤーの点数変動
+    sc = list(map(int, attr["sc"].split(",")))
+    fenpei = [sc[i] * 100 for i in (1, 3, 5, 7)]
+    fenpei = fenpei[oya:] + fenpei[:oya]
+
+    ten = list(map(int, attr["ten"].split(",")))
+
+    result = {
+        "l": l,
+        "shoupai": shoupai,
+        "baojia": baojia,
+        "defen": ten[1],
+        "hupai": hupai,
+        "fenpei": fenpei
+    }
+
+    if attr.get("doraHaiUra"):
+        result["fubaopai"] = [
+            pai(int(tile), hongpai)
+            for tile in attr["doraHaiUra"].split(",")
+        ]
+
+    if yakuman:
+        result["damanguan"] = len(yakuman.split(","))
+    else:
+        result["fu"] = ten[0]
+        result["fanshu"] = fanshu
+
+    return {"hule": result}
+
+
+# ============================================================
 # メイン変換
 # ============================================================
 
@@ -395,7 +492,7 @@ def convert_mjlog(file_path):
 
             paipu["log"].append({
                 "zimo": {
-                    "l": player,
+                    "l": (player + 4 - oya) % 4,
                     "p": pai(tile_id, hongpai)
                 }
             })
@@ -405,12 +502,25 @@ def convert_mjlog(file_path):
             player = int(elem.attrib["who"])
             m = int(elem.attrib["m"])
 
+            relative_player = (player - oya + 4) % 4
+
             paipu["log"].append({
                 "fulou": {
-                    "l": player,
+                    "l": relative_player,
                     "m": mianzi(m, hongpai)
                 }
             })
+
+
+
+        # ----------------------------------------------------
+        # AGARI → hule(和了) 
+        # ----------------------------------------------------
+        elif elem.tag == "AGARI":
+            paipu["log"].append(
+                hule(elem.attrib, oya, hongpai)
+            )
+            
         # ----------------------------------------------------
         # DEFG → 打牌
         # ----------------------------------------------------
@@ -433,9 +543,11 @@ def convert_mjlog(file_path):
                 tile += "*"
                 reach[player] = False
 
+            relative_player = (player - oya + 4) % 4
+
             paipu["log"].append({
                 "dapai": {
-                    "l": player,
+                    "l": relative_player,
                     "p": tile
                 }
             })
