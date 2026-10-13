@@ -196,7 +196,45 @@ function extractGame(paipu, gameId) {
                 const player =
                     (dealer + fulou.l) % 4;
 
-                furoPlayers.add(player);
+                const m = fulou.m;
+
+                // 牌の部分を取得
+                const tilePart = m.slice(1);
+
+                // ------------------------
+                // 大明槓
+                // 例: p555-5
+                // ------------------------
+                const isDaiminkan =
+                    /^[mpsz][0-9]{3}[+\-=][0-9]$/.test(m);
+
+                // ------------------------
+                // チー
+                // 例: p345-
+                //      p40-6
+                // ------------------------
+                const isChi =
+                    /^[mpsz][0-9]{3}[+\-=]$/.test(m) &&
+                    !(
+                        tilePart[0] === tilePart[1] &&
+                        tilePart[1] === tilePart[2]
+                    );
+
+                // ------------------------
+                // ポン
+                // 例: p444+
+                //      z555-
+                // ------------------------
+                const isPon =
+                    /^[mpsz][0-9]{3}[+\-=]$/.test(m) &&
+                    tilePart[0] === tilePart[1] &&
+                    tilePart[1] === tilePart[2];
+
+                // チー・ポン・大明槓だけを
+                // furoとして記録
+                if (isChi || isPon || isDaiminkan) {
+                    furoPlayers.add(player);
+                }
             }
 
 
