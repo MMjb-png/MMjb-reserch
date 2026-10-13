@@ -96,229 +96,218 @@ function extractGame(paipu, gameId) {
     const qijia = paipu.qijia;
 
 
+    
     // ================================
     // 各局を処理
     // ================================
-    for (const log of paipu.log) {
+    let currentKyoku = null;
 
-        if (!Array.isArray(log) || log.length === 0) {
-            continue;
-        }
+    function processKyoku(log) {
+        if (!log || !log.qipai) return;
 
+        const qipai = log.qipai;
+        const jushu = qipai.zhuangfeng * 4 + qipai.jushu;
+        const dealer = (qijia + jushu) % 4;
 
-        // ----------------------------
-        // 局情報(qipai)
-        // ----------------------------
-        const qipaiEvent = log.find(data => data.qipai);
-
-        if (!qipaiEvent) {
-            continue;
-        }
-
-        const qipai = qipaiEvent.qipai;
-
-        const jushu =
-            qipai.zhuangfeng * 4 + qipai.jushu;
-
-
-        // この局の東家を絶対プレイヤー番号に変換
-        const dealer =
-            (qijia + jushu) % 4;
-
-
-        // ----------------------------
         // 局数を全員に加算
-        // ----------------------------
         for (let relative = 0; relative < 4; relative++) {
-
-            const player =
-                (dealer + relative) % 4;
-
+            const player = (dealer + relative) % 4;
             data.kyoku_count[player]++;
         }
 
-
-        // ----------------------------
-        // 局内の一時データ
-        // ----------------------------
-
-        // 各プレイヤーのこの局の打牌数
         const kyokuDiscardCount = [0, 0, 0, 0];
-
-        // この局で副露したプレイヤー
         const furoPlayers = new Set();
 
-
-        // ============================
         // 局内イベントを順番に処理
-        // ============================
-
-        for (const event of log) {
-
-
-            // ------------------------
-            // 打牌
-            // ------------------------
+        for (const event of log.events) {
             if (event.dapai) {
-
                 const dapai = event.dapai;
-
-                const player =
-                    (dealer + dapai.l) % 4;
-
+                const player = (dealer + dapai.l) % 4;
 
                 data.discard_count[player]++;
-
                 kyokuDiscardCount[player]++;
 
-
-                // リーチ宣言
+                // リーチ宣言牌
                 if (
                     typeof dapai.p === "string" &&
                     dapai.p.endsWith("*")
                 ) {
-
                     data.riichi_count[player]++;
-
-                    data.riichi_dapai_sum[player]
-                        += kyokuDiscardCount[player];
+                    data.riichi_dapai_sum[player] +=
+                        kyokuDiscardCount[player];
                 }
-            }
-
-
-            // ------------------------
-            // 副露
-            // ------------------------
-            else if (event.fulou) {
-
+            } else if (event.fulou) {
                 const fulou = event.fulou;
-
-                const player =
-                    (dealer + fulou.l) % 4;
-
+                const player = (dealer + fulou.l) % 4;
                 const m = fulou.m;
 
-                // 牌の部分を取得
-                const tilePart = m.slice(1);
-
-                // ------------------------
-                // 大明槓
-                // 例: p555-5
-                // ------------------------
+                // チー・ポン・大明槓のみを数える
                 const isDaiminkan =
                     /^[mpsz][0-9]{3}[+\-=][0-9]$/.test(m);
 
-                // ------------------------
-                // チー
-                // 例: p345-
-                //      p40-6
-                // ------------------------
                 const isChi =
                     /^[mpsz][0-9]{3}[+\-=]$/.test(m) &&
                     !(
-                        tilePart[0] === tilePart[1] &&
-                        tilePart[1] === tilePart[2]
+                        m[1] === m[2] &&
+                        m[2] === m[3]
                     );
 
-                // ------------------------
-                // ポン
-                // 例: p444+
-                //      z555-
-                // ------------------------
                 const isPon =
                     /^[mpsz][0-9]{3}[+\-=]$/.test(m) &&
-                    tilePart[0] === tilePart[1] &&
-                    tilePart[1] === tilePart[2];
+                    m[1] === m[2] &&
+                    m[2] === m[3];
 
-                // チー・ポン・大明槓だけを
-                // furoとして記録
                 if (isChi || isPon || isDaiminkan) {
                     furoPlayers.add(player);
                 }
-            }
-
-
-            // ------------------------
-            // 和了
-            // ------------------------
-            else if (event.hule) {
-
+            } else if (event.hule) {
                 const hule = event.hule;
+                const winner = (dealer + hule.l) % 4;
 
-                const winner =
-                    (dealer + hule.l) % 4;
-
-
-                // 和了回数
                 data.agari_count[winner]++;
 
+                const points = Number(hule.defen) || 0;
+                data.agari_points[winner] += points;
 
-                // 和了点
-                const points =
-                    Number(hule.defen) || 0;
-
-                data.agari_points[winner]
-                    += points;
-
-
-                // 最小和了点
                 if (
                     data.min_agari_points[winner] === null ||
                     points < data.min_agari_points[winner]
                 ) {
-
-                    data.min_agari_points[winner]
-                        = points;
+                    data.min_agari_points[winner] = points;
                 }
 
-
-                // 最大和了点
                 if (
                     data.max_agari_points[winner] === null ||
                     points > data.max_agari_points[winner]
                 ) {
-
-                    data.max_agari_points[winner]
-                        = points;
+                    data.max_agari_points[winner] = points;
                 }
 
-
-                // ツモ / ロン
                 if (hule.baojia == null) {
-
                     data.tsumo_agari_count[winner]++;
-
-                }
-                else {
-
+                } else {
                     data.ron_agari_count[winner]++;
-
-
-                    // 放銃者
-                    const houju =
-                        (dealer + hule.baojia) % 4;
-
+                    const houju = (dealer + hule.baojia) % 4;
                     data.houju_count[houju]++;
                 }
             }
         }
 
-
-        // ============================
-        // 局終了時の処理
-        // ============================
-
-
-        // 副露したプレイヤー
+        // 副露したプレイヤーを局ごとに1回加算
         for (const player of furoPlayers) {
-
             data.furo_kyoku_count[player]++;
         }
-
-
     }
 
+    // paipu.log はイベントオブジェクトの配列
+    for (const event of paipu.log) {
+        if (event.qipai) {
+            // 次の局が始まったら、前の局を確定
+            if (currentKyoku !== null) {
+                processKyoku(currentKyoku);
+            }
 
+            currentKyoku = {
+                qipai: event.qipai,
+                events: [event]
+            };
+        } else if (currentKyoku !== null) {
+            currentKyoku.events.push(event);
+        }
+    }
+
+    // 最後の局も処理
+    if (currentKyoku !== null) {
+        processKyoku(currentKyoku);
+    }
+
+    
+    // ================================
+    // 最終得点・順位・ポイントを計算
+    // ================================
+    const finalPoints = [null, null, null, null];
+
+    // 最後の局の開始位置を探す
+    let lastKyokuIndex = -1;
+
+    for (let i = 0; i < paipu.log.length; i++) {
+        if (paipu.log[i].qipai) {
+            lastKyokuIndex = i;
+        }
+    }
+
+    if (lastKyokuIndex >= 0) {
+        const qipai = paipu.log[lastKyokuIndex].qipai;
+
+        const jushu =
+            qipai.zhuangfeng * 4 + qipai.jushu;
+
+        const dealer = (qijia + jushu) % 4;
+
+        // 最終局開始時の点数を絶対プレイヤー順に変換
+        const startPoints = qipai.defen;
+
+        if (Array.isArray(startPoints) &&
+            startPoints.length === 4) {
+
+            for (let relative = 0; relative < 4; relative++) {
+                const player = (dealer + relative) % 4;
+
+                finalPoints[player] =
+                    Number(startPoints[relative]);
+            }
+
+            // 最終局の点数変動を加算
+            for (let i = lastKyokuIndex + 1;
+                 i < paipu.log.length; i++) {
+
+                const event = paipu.log[i];
+
+                if (event.qipai) break;
+
+                const result = event.hule || event.pingju;
+
+                if (!result || !Array.isArray(result.fenpei)) {
+                    continue;
+                }
+
+                for (let relative = 0; relative < 4; relative++) {
+                    const player = (dealer + relative) % 4;
+
+                    finalPoints[player] +=
+                        Number(result.fenpei[relative]) || 0;
+                }
+            }
+
+            // 得点の高い順に順位を決定
+            const sortedPlayers = [0, 1, 2, 3].sort(
+                (a, b) => finalPoints[b] - finalPoints[a]
+            );
+
+            const ranks = [null, null, null, null];
+
+            sortedPlayers.forEach((player, index) => {
+                ranks[player] = index + 1;
+            });
+
+            // 天鳳四人麻雀の順位点を使用
+            const uma = {
+                1: 40,
+                2: 10,
+                3: -10,
+                4: -20
+            };
+
+            const points = finalPoints.map((score, player) => {
+                return (score - 30000) / 1000 + uma[ranks[player]];
+            });
+
+            data.final_point = finalPoints;
+            data.rank = ranks;
+            data.point = points;
+        }
+    }
+    
     // ================================
     // 1試合 → 4行に変換
     // ================================

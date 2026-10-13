@@ -439,8 +439,19 @@ def convert_mjlog(file_path):
         # UN
         # ----------------------------------------------------
 
+        
         elif elem.tag == "UN":
-            paipu["player"] = parse_players(elem.attrib)
+            # 4人分の名前がまだ取得されていない場合だけ初期化
+            if not paipu["player"]:
+                paipu["player"] = ["", "", "", ""]
+
+            # 後続のUN要素で、既存の名前を空文字で上書きしない
+            for i in range(4):
+                encoded_name = elem.attrib.get(f"n{i}", "")
+                if encoded_name:
+                    name = unquote(encoded_name)
+                    if name:
+                        paipu["player"][i] = name
 
         # ----------------------------------------------------
         # TAIKYOKU
