@@ -3,7 +3,7 @@ from pathlib import Path
 from tenhou_to_majiang import convert_mjlog
 
 # 入力：リポジトリ直下の天鳳牌譜ディレクトリ
-INPUT_DIR = Path("../tenhou_mjlogs")
+INPUT_DIR = Path("tenhou_mjlogs")
 
 # 出力：JSON専用ディレクトリ
 OUTPUT_DIR = Path("paipu_json")

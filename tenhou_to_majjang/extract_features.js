@@ -41,6 +41,11 @@ function playerName(name) {
 // ================================
 function extractGame(paipu, gameId) {
 
+    // 四鳳南喰赤以外は分析対象外
+    if (paipu.title !== "四鳳南喰赤") {
+        return [];
+    }
+
     if (!paipu.player || paipu.player.length !== 4) {
         throw new Error("player情報が4人分ありません");
     }
@@ -307,7 +312,7 @@ function extractGame(paipu, gameId) {
             data.point = points;
         }
     }
-    
+
     // ================================
     // 1試合 → 4行に変換
     // ================================
